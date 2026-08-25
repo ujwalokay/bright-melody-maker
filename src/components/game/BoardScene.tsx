@@ -25,48 +25,19 @@ export function nodePosition(i: number): [number, number, number] {
 }
 
 /**
- * Finds the yaw (radians) that makes the model's footprint axis-aligned, so a
- * board authored at an arbitrary angle still lines up with the square grid.
+ * Measured bounds of the console's dark play screen in the GLB's own space
+ * (front-facing ortho scan of the model). The screen faces +X.
  */
-function bestYaw(object: THREE.Object3D): number {
-  const points: number[] = [];
-  object.updateWorldMatrix(true, true);
-  object.traverse((o) => {
-    const m = o as THREE.Mesh;
-    const pos = m.isMesh ? (m.geometry.getAttribute("position") as THREE.BufferAttribute) : null;
-    if (!pos) return;
-    const step = Math.max(1, Math.floor(pos.count / 4000));
-    const v = new THREE.Vector3();
-    for (let i = 0; i < pos.count; i += step) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
-      points.push(v.x, v.z);
-    }
-  });
-  if (points.length === 0) return 0;
+const SCREEN = {
+  planeX: 0.053,
+  centerY: 0.1217,
+  centerZ: 0.0034,
+  /** Extent along the model's Y axis -> table depth after alignment. */
+  depth: 0.5946,
+  /** Extent along the model's Z axis -> table width after alignment. */
+  width: 0.807,
+};
 
-  let best = 0;
-  let bestArea = Infinity;
-  for (let deg = 0; deg < 90; deg += 0.5) {
-    const t = (deg * Math.PI) / 180;
-    const ca = Math.cos(t);
-    const sa = Math.sin(t);
-    let xmin = Infinity, xmax = -Infinity, zmin = Infinity, zmax = -Infinity;
-    for (let i = 0; i < points.length; i += 2) {
-      const x = points[i]! * ca - points[i + 1]! * sa;
-      const z = points[i]! * sa + points[i + 1]! * ca;
-      if (x < xmin) xmin = x;
-      if (x > xmax) xmax = x;
-      if (z < zmin) zmin = z;
-      if (z > zmax) zmax = z;
-    }
-    const area = (xmax - xmin) * (zmax - zmin);
-    if (area < bestArea) {
-      bestArea = area;
-      best = t;
-    }
-  }
-  return best;
-}
 
 /** The physical Bagh-Chal board (GLB), scaled so its top face is the grid plane. */
 function BoardModel() {
@@ -82,38 +53,48 @@ function BoardModel() {
       }
     });
 
-    // Straighten the model, then measure it in that straightened frame.
+    // The GLB is authored as an upright console: the play screen faces +X and
+    // the button bar sits below it (-Y). Rz(+90) lays the screen face up,
+    // Ry(-90) swings the button bar to the front of the table (+Z).
     const aligned = new THREE.Group();
     aligned.rotation.set(
       (tune("mrx", 0) * Math.PI) / 180,
-      bestYaw(clone) + (tune("mry", 0) * Math.PI) / 180,
-      (tune("mrz", 0) * Math.PI) / 180,
+      (tune("mry", -90) * Math.PI) / 180,
+      (tune("mrz", 90) * Math.PI) / 180,
     );
     aligned.add(clone);
     aligned.updateWorldMatrix(true, true);
 
-    const box = new THREE.Box3().setFromObject(aligned);
-    const size = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
-    console.log("[boarddbg]", JSON.stringify({ size, center, yaw: (bestYaw(clone) * 180) / Math.PI, min: box.min, max: box.max }));
+    // Fit the grid to the measured screen (model space) rather than the whole
+    // chassis, so the 5x5 nodes land inside the playable panel.
+    const ms = tune("ms", 1);
+    const scaleZ = (tune("bh", BOARD_TARGET_HALF) / (SCREEN.depth / 2)) * ms;
+    const scaleX = (tune("bw", BOARD_TARGET_HALF + 0.5) / (SCREEN.width / 2)) * ms;
 
-    const half = Math.max(size.x, size.z) / 2 || 1;
-    const scale = (tune("bh", BOARD_TARGET_HALF) / half) * tune("ms", 1);
+    // Put the screen's own center (and its surface plane) on the grid origin.
+    const screenCenter = new THREE.Vector3(
+      SCREEN.planeX,
+      SCREEN.centerY,
+      SCREEN.centerZ,
+    ).applyEuler(aligned.rotation);
 
-
-    // Center on the origin and drop the top face onto y = 0 of the wrapper.
     const centered = new THREE.Group();
-    centered.position.set(-center.x + tune("mx", 0), -box.max.y + tune("my", 0), -center.z + tune("mz", 0));
+    centered.position.set(
+      -screenCenter.x + tune("mx", 0),
+      -screenCenter.y + tune("my", 0),
+      -screenCenter.z + tune("mz", 0),
+    );
+    console.log('[boardsc]', JSON.stringify({sc: screenCenter.toArray(), scaleX, scaleZ}));
     centered.add(aligned);
 
     const wrapper = new THREE.Group();
-    wrapper.scale.setScalar(scale);
+    wrapper.scale.set(scaleX, scaleZ, scaleZ);
     wrapper.add(centered);
     return wrapper;
 
+
   }, [scene]);
+
 
   return (
     <group position={[0, BOARD_Y, 0]}>

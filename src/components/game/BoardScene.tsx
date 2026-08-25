@@ -67,22 +67,30 @@ function BoardModel() {
 
     // Fit the grid to the measured screen (model space) rather than the whole
     // chassis, so the 5x5 nodes land inside the playable panel.
-    const half = SCREEN.depth / 2;
-    const scale = (tune("bh", BOARD_TARGET_HALF) / half) * tune("ms", 1);
+    const ms = tune("ms", 1);
+    const scaleZ = (tune("bh", BOARD_TARGET_HALF) / (SCREEN.depth / 2)) * ms;
+    const scaleX = (tune("bw", BOARD_TARGET_HALF + 0.5) / (SCREEN.width / 2)) * ms;
 
-    // Screen center in the rotated frame: X = -z, Y = x, Z = -y.
+    // Put the screen's own center (and its surface plane) on the grid origin.
+    const screenCenter = new THREE.Vector3(
+      SCREEN.planeX,
+      SCREEN.centerY,
+      SCREEN.centerZ,
+    ).applyEuler(aligned.rotation);
+
     const centered = new THREE.Group();
     centered.position.set(
-      SCREEN.centerZ + tune("mx", 0),
-      -SCREEN.planeX + tune("my", 0),
-      -SCREEN.centerY + tune("mz", 0),
+      -screenCenter.x + tune("mx", 0),
+      -screenCenter.y + tune("my", 0),
+      -screenCenter.z + tune("mz", 0),
     );
     centered.add(aligned);
 
     const wrapper = new THREE.Group();
-    wrapper.scale.setScalar(scale);
+    wrapper.scale.set(scaleX, scaleZ, scaleZ);
     wrapper.add(centered);
     return wrapper;
+
 
   }, [scene]);
 

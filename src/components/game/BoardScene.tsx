@@ -97,9 +97,11 @@ function BoardModel() {
     const center = new THREE.Vector3();
     box.getSize(size);
     box.getCenter(center);
+    console.log("[boarddbg]", JSON.stringify({ size, center, yaw: (bestYaw(clone) * 180) / Math.PI, min: box.min, max: box.max }));
 
     const half = Math.max(size.x, size.z) / 2 || 1;
     const scale = (tune("bh", BOARD_TARGET_HALF) / half) * tune("ms", 1);
+
 
     // Center on the origin and drop the top face onto y = 0 of the wrapper.
     const centered = new THREE.Group();

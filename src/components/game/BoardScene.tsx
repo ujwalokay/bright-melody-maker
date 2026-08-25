@@ -84,6 +84,7 @@ function BoardModel() {
       -screenCenter.y + tune("my", 0),
       -screenCenter.z + tune("mz", 0),
     );
+    console.log('[boardsc]', JSON.stringify({sc: screenCenter.toArray(), scaleX, scaleZ}));
     centered.add(aligned);
 
     const wrapper = new THREE.Group();

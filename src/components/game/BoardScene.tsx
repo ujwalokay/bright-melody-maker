@@ -62,6 +62,7 @@ function BoardModel() {
       (tune("mry", -90) * Math.PI) / 180,
       (tune("mrz", 90) * Math.PI) / 180,
     );
+    console.log("[boardrot]", aligned.rotation.x, aligned.rotation.y, aligned.rotation.z);
     aligned.add(clone);
     aligned.updateWorldMatrix(true, true);
 
